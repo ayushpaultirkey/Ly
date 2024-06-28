@@ -8,6 +8,11 @@ export default defineConfig({
     build: {
         outDir: "../dist"
     },
+    optimizeDeps: {
+        entries: [
+            'public/script/app.js',
+        ]
+    },
     plugins: [
         h12VitePlugin()
     ],
