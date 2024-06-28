@@ -1,6 +1,8 @@
 import { join } from "path";
 import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "url";
+import tailwindcss from "tailwindcss";
+import autoprefixer from "autoprefixer";
 import h12VitePlugin from "./plugin/h12.vite";
 
 export default defineConfig({
@@ -20,5 +22,14 @@ export default defineConfig({
         alias: [
             { find: "@library", replacement: fileURLToPath(new URL("./public/library", import.meta.url)) }
         ]
-    }
+    },
+    css: {
+        postcss: {
+            plugins: [
+                tailwindcss(),
+                autoprefixer(),
+                // Other PostCSS plugins if needed
+            ],
+        },
+    },
 })

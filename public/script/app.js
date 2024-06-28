@@ -1,4 +1,4 @@
-import "./../style/output.css";
+import "./../style/main.css";
 import H12 from "@library/h12";
 
 @Component
