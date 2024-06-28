@@ -1,12 +1,15 @@
 import { join } from "path";
 import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "url";
-import H12VitePlugin from "./plugin/vite";
+import h12VitePlugin from "./plugin/h12.vite";
 
 export default defineConfig({
     root: join(__dirname, "/public"),
+    build: {
+        outDir: "../dist"
+    },
     plugins: [
-        H12VitePlugin()
+        h12VitePlugin()
     ],
     resolve: {
         alias: [

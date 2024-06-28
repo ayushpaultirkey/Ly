@@ -1,9 +1,8 @@
 import "./../style/output.css";
 import H12 from "@library/h12";
 
-//
 @Component
-class App extends H12.Component {
+class App extends H12 {
     constructor() {
         super();
     }
@@ -21,5 +20,5 @@ class App extends H12.Component {
     }
 };
 
-//
-H12.Component.Render(App, ".app");
+// Render application
+H12.Render(App, ".app");
