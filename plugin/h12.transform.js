@@ -1,45 +1,65 @@
-import fs from "fs";
 import XRegExp from "xregexp";
 import { JSDOM } from "jsdom";
 
 /**
-    * H12 transpiler function
+    * H12 transform function
     * @param {string} code The js code containing H12 component
     * @returns {string}
     * @description
-    * * Transform version: `v2.0.0`
+    * * Client version: `v2.1.0`
+    * * Transform version: `v2.1.0`
     * * Github: https://github.com/ayushpaultirkey/h12
 */
-function main(code = "") {
+function main(code = "", ignoreCheck = false) {
 
-    // Check if the component contain @Component
-    if(!code.includes("@Component")) {
+    // Check if the code is h12 component
+    if(!code.includes("@Component") && !ignoreCheck) {
         return code;
     };
-
-    // Remove component tag from code
     code = code.replace(/@Component/g, "");
 
     //Get all template element
-    const _matchTemplate = code.matchAll(/<>(.*?)<\/>/gs);
-    for(const _template of _matchTemplate) {
+    //const matchTemplate = code.matchAll(/<>(.*?)<\/>/gs);
+    let matchTemplate = XRegExp.matchRecursive(code, "<>", "</>", "gi");
+    for(let template of matchTemplate) {
 
-        //Get all value that are inside {} bracket
-        const _matchBracket = XRegExp.matchRecursive(_template[1], "{", "}", "gi");
-        for(const _bracket of _matchBracket) {
+        let templateOriginal = "<>" + template + "</>";
 
-            // If template contain any space then its not a key
-            // Else the value is a key
-            if(_bracket.match(/\s/gm)) {
-                _template[1] = _template[1].replace(`{${_bracket}}`, `"___\${${_bracket.replace(/"/g, "'").trim()}\}___"`);
+        let matchBracket = XRegExp.matchRecursive(template, "{", "}", "gi");
+
+        let placeholderIndex = 0;
+        let placeholderList = [];
+        for(const bracket of matchBracket) {
+
+            if(bracket.match(/\s/gm)) {
+                template = template.replace(`{${bracket}}`, `{@PLACEHOLDER${placeholderIndex}}`);
+                placeholderList.push(bracket);
+                placeholderIndex++;
             };
 
         };
-        
-        // Pharse dom and replace it with methods
-        const _dom = new JSDOM(_template[1]);
-        const _transformed = pharse(_dom.window.document.body.children[0]);
-        code = code.replace(_template[0], _transformed);
+
+        let dom = new JSDOM(template);
+        let pharsed = phrase(dom.window.document.body.children[0]);
+
+        placeholderIndex = 0;
+        for(const placeholder of placeholderList) {
+            if(pharsed.includes(`{@PLACEHOLDER${placeholderIndex}}_@SCOPE`)) {
+                pharsed = pharsed.replace(`{@PLACEHOLDER${placeholderIndex}}_@SCOPE`, placeholder.trim());
+            }
+            else {
+                pharsed = pharsed.replace(`@PLACEHOLDER${placeholderIndex}`, placeholder.trim());
+            }
+            placeholderIndex++;
+        };
+
+
+        if(pharsed.includes("<>") && pharsed.includes("</>")) {
+            code = code.replace(templateOriginal, main(pharsed, true));
+        }
+        else {
+            code = code.replace(templateOriginal, pharsed);
+        }
 
     };
 
@@ -47,179 +67,114 @@ function main(code = "") {
 
 }
 
-function pharse(_element = document.body) {
+function phrase(element = document.body) {
+
+    if(!element) {
+        return "";
+    }
 
     // Get elements values
-    const _child = _element.childNodes;
-    const _children = _element.children;
-    const _attribute = _element.getAttributeNames();
+    const childNodes = element.childNodes;
+    const attributes = element.getAttributeNames();
 
-    // Create child's code
-    let _childCode = "";
+    const attributeList = [];
+    for(const attribute of attributes) {
 
-    // Create attribute value
-    let _attributeValue = "{";
-    
-    // Iterate for all values
-    for(var i = 0; i < _attribute.length; i++) {
-
-        // Get attribute value
-        let _value = _element.getAttribute(_attribute[i]);
-
-        // Check if its a component and ignore args, ref and scope
-        if((_attribute[i] == "args" && _value == "") || _attribute[i] == "ref" || _attribute[i] == "scope") {
+        const attributeValue = element.getAttribute(attribute);
+        if((attribute == "args" && attributeValue == "") || attribute == "ref" || attribute == "scope") {
             continue;
-        };
+        }
 
-        // Check for placeholder
-        if(_value.indexOf("__") == 0) {
-
-            // Replace placeholder
-            _value = _value.replace(/___\${/g, "");
-            _value = _value.replace(/}___/g, "");
-
-            // Assign attribute value
-            _attributeValue += `"${_attribute[i]}": ${_value},`;
-
+        if(attributeValue.includes("@PLACEHOLDER")) {
+            attributeList.push(`"${attribute}": ${attributeValue.replace(/\{|\}/g, "")}`);
         }
         else {
+            attributeList.push(`"${attribute}": \`${attributeValue}\``);
+        }
 
-            // Assign attribute value
-            _attributeValue += `"${_attribute[i]}": \`${_value}\`,`;
+    }
 
-        };
+    const childList = [];
+    for(var i = 0, ilen = childNodes.length; i < ilen; i++) {
 
-    };
+        const child = childNodes[i];
+        
+        if(child.nodeType === 3) {
 
-    // End attribute value
-    _attributeValue += "}";
-    _attributeValue = _attributeValue.replace(",}", "}");
+            const textValue = child.nodeValue;
+            const textMatch = textValue.match(/\w+(?:\.\w+)+|\w+|\S+/gm);
 
-    // Check all current element child node
-    for(var i = 0, ilen = _child.length; i < ilen; i++) {
+            if(textMatch) {
 
-        // Check child node type
-        if(_child[i].nodeType == 3) {
+                let text = textValue.replace(/\n|\s\s/g, "");
 
-            // Get node content
-            let _childValue = _child[i].nodeValue;
-            let _childMatch = _childValue.match(/\w+(?:\.\w+)+|\w+|\S+/gm);
+                let keyMatch = text.match(/\{[^{}\s]*\}/gm);
+                if(keyMatch) {
 
-            // Check if the text node contain any value
-            if(_childMatch !== null) {
+                    let keyPlaceholder = "@SPLIT";
+                    let textModified = text;
+                    keyMatch.forEach(match => {
+                        textModified = textModified.replace(match, keyPlaceholder);
+                    });
 
-                //Remove extra space from string
-                let _textValue = _childValue.replace(/\n|\s\s/g, "");
-                let _textSample = "";
-            
-                // Match for any key in the node
-                const _keyMatch = _textValue.match(/\{[^{}\s]*\}/gm);
+                    const textParts = textModified.split(keyPlaceholder);
 
-                //If node value is not empty then check for any key and split them into individual nodes
-                if(_childMatch.length > 1 || _children.length > 0) {
-
-                    // Check if the text node contain any dyanmic value
-                    if(_keyMatch) {
-
-                        // Perform split for the key of the non key can be
-                        const _placeholder = "_SPLIT_";
-                        let _modifiedString = _textValue;
-                        if(_keyMatch) {
-                            _keyMatch.forEach(match => {
-                                _modifiedString = _modifiedString.replace(match, _placeholder);
-                            });
-                        };
-
-                        // Split the string using the placeholder
-                        const _splitPart = _modifiedString.split(_placeholder);
-
-                        // Add the extracted matches back into the split parts
-                        if(_keyMatch) {
-                            for(let i = 0; i < _keyMatch.length; i++) {
-                                _splitPart.splice(2 * i + 1, 0, _keyMatch[i]);
-                            };
-                        };
-
-                        // Create a node value using the split parts
-                        let _temp = "";
-                        for(let i = 0; i < _splitPart.length; i++) {
-                            if(_splitPart[i].length !== 0) {
-
-                                if(_textValue.includes(`__$${_splitPart[i]}__`)) {
-                                    _temp += "`$" + _splitPart[i] + "`,";
-                                }
-                                else {
-                                    _temp += "`" + _splitPart[i] + "`,";
-                                };
-
-                            };
-                        };
-
-                        // Sample from the temp value
-                        _textSample += _temp.replace(/"___\$|___"/g, "");
-
+                    for(let j = 0; j < keyMatch.length; j++) {
+                        textParts.splice(2 * j + 1, 0, keyMatch[j]);
                     }
-                    else {
+                    for(let j = 0; j < textParts.length; j++) {
+                        if(textParts[j].length !== 0) {
+                            if(textParts[j].includes("@PLACEHOLDER")) {
+                                childList.push(textParts[j].replace(/\{|\}/g, ""));
+                            }
+                            else {
+                                childList.push("`" + textParts[j] + "`");
+                            }
+                        }
+                    }
 
-                        // When text node doesnt contain any key
-                        _textSample += `\`${_textValue}\`,`;
-
-                    };
-                    
                 }
                 else {
+                    childList.push("`" + text + "`");
+                }
 
-                    // When there is no child
-                    _textSample += `\`${_textValue}\`,`;
+            }
 
-                };
-
-                // Replace placeholder
-                _textSample = _textSample.replace(/"___|___"/g, "");
-
-                // Set the child node's value
-                _childCode += _textSample;
-
-            };
-            
         }
         else {
+            childList.push(phrase(child));
+        }
 
-            // Recursive for each chils
-            _childCode += pharse(_child[i]) + ",";
+    }
 
-        };
+    const childCode = `[${childList.join(",")}]`;
+    const attributeCode = `{${attributeList.join(",")}}`;
 
-    };
+    const hasScope = element.hasAttribute("scope");
+    const hasReference = element.hasAttribute("ref");
+    const isComponent = element.hasAttribute("args");
 
-    // Check if child is not empty
-    if(_childCode.indexOf(",") !== -1) {
-        _childCode = `[${_childCode}]`;
+    const scope = (isComponent && hasScope) ? element.getAttribute("scope") + "_@SCOPE" :  "this";
+    const method = isComponent ? "component" : "node";
+    const isAsync = isComponent ? "await" : "";
+
+    let tagName = element.tagName.toLowerCase();
+    if(isComponent) {
+        if(hasReference) {
+            tagName = element.getAttribute("ref");
+        }
+        else {
+            tagName = tagName.charAt(0).toUpperCase() + tagName.slice(1);
+        }
     }
     else {
-        if(_childCode == "") {
-            _childCode = "[]";
-        };
-    };
+        tagName = `"${tagName}"`;
+    }
 
-    // Get node function type
-    let _component = (_element.hasAttribute("args")) ? "await this.component" : "this.node";
-    let _scope = (_element.hasAttribute("scope")) ? _element.getAttribute("scope") : _component;
+    const code = `${isAsync} ${scope}.${method}(${tagName},${childCode},${attributeCode})`;
 
-    // Get name of the node and check if the refernce is present
-    let _name = _element.tagName.toLowerCase();
-    let _reference = (_element.hasAttribute("ref")) ? _element.getAttribute("ref") : `"${_name}"`;
+    return code.replace(/,\)/g, ")");
 
-    // Replace placeholder
-    _reference = _reference.replace(/___\${/g, "");
-    _reference = _reference.replace(/}___/g, "");
-
-    // Create node code
-    let _code = `${_scope}(${_reference},${_childCode},${_attributeValue})`;
-    
-    // Return the formatted code
-    return _code.replace(/,\]/g, "]").replace(/,,/g, ",");
-
-};
+}
 
 export default main;

@@ -3,7 +3,8 @@ window.$fx = {};
 /**
     * H12 component class
     * @description
-    * * Client version: `v2.0.0`
+    * * Client version: `v2.1.0`
+    * * Transform version: `v2.1.0`
     * * Github: https://github.com/ayushpaultirkey/h12
 */
 export default class H12 {
@@ -56,7 +57,7 @@ export default class H12 {
         * @param {*} args The arguments passed by the `pre()` function, alternatively it can also be accessed by `this.args`
         * @example
         * async init(args = {}) {
-        *   this.Set("{color}", "red");
+        *   this.set("{color}", "red");
         * }
     */
     async init(args = {}) {}
@@ -96,8 +97,8 @@ export default class H12 {
             // If the arguments contain child then try to set the {child} key
             // It is usually passed is the component tag have a child element
             if(this.args.child instanceof Element) {
-                this.Set("{child}", this.args.child);
-            };
+                this.set("{child}", this.args.child);
+            }
 
             // Initialize the component
             await this.init(args);
@@ -106,15 +107,14 @@ export default class H12 {
             if(element !== null) {
                 document.querySelector(element).appendChild(this.root);
                 await this.finally();
-            };
+            }
 
             // Else return the root node
             return this.root;
 
         }
-        catch(exception) {
-            console.error(`H12.pre(): Initialize error\n${exception.stack}`);
-            return null;
+        catch(error) {
+            console.error(error);
         };
 
     }
@@ -126,7 +126,7 @@ export default class H12 {
         * `3 | A`:  Attribute
         * 
         * @param {string} type Element or component name
-        * @param {Array<Element|string>} child Array of child elements or string
+        * @param {Array<Element|string>} children Array of child elements or string
         * @param {Object<string, string | Function>} attribute Object with key as attribute name and with value
         * @returns {Element}
         * 
@@ -135,92 +135,85 @@ export default class H12 {
         * this.node("div", ["Hello world"], { class: "bg-red-500" })
         * this.node("div", ["Hello world"], { onclick: () => {} })
     */
-    node(type = "", child = [], attribute = {}) {
+    node(type = "", children = [], attributes = {}) {
 
-        // Create new element using the type
-        let _element = document.createElement(type);
-        let _attribute = [];
+        const element = document.createElement(type);
+        const attributeList = [];
 
-        // Iterate for each child
-        for(var i = 0, len = child.length; i < len; i++) {
+        for(const child of children) {
+            
+            const childType = typeof(child);
 
-            // Is its simple string then check for the key and append that text node
-            if(typeof(child[i]) === "string") {
+            if(childType === "string") {
 
-                // Create a new text node
-                let _text = document.createTextNode(child[i]);
-                _element.append(_text);
+                const textNode = document.createTextNode(child);
+                element.append(textNode);
 
                 // Match for any possible key
                 // If no key then skip other steps
-                let _match = child[i].match(/\{[^{}\s]*\}/gm);
-                if(_match == null) {
+                const textMatch = child.match(/\{[^{}\s]*\}/gm);
+                if(!textMatch) {
                     continue;
-                };
+                }
 
-                // Add binding and continie
-                if(typeof(this.#binding[_match[0]]) === "undefined") {
-                    this.#binding[_match[0]] = { element: [], data: "" };
-                };
-                this.#binding[_match[0]].element.push({ node: _text, type: "T", clone: [] });
-
+                // Add binding and continue
+                if(typeof(this.#binding[textMatch[0]]) === "undefined") {
+                    this.#binding[textMatch[0]] = { element: [], data: "" };
+                }
+                this.#binding[textMatch[0]].element.push({ node: textNode, type: "T", parent: textNode.parentNode, clone: [] });
                 continue;
 
-            };
-
-            // Append the non text element
-            _element.append(child[i]);
-
-        };
-
-        // Check for key in the attribute
-        for(const key in attribute) {
+            }
+            else if(childType === "function") {
+                element.append(child());
+                continue;
+            }
             
-            // Get attribute's value
-            let _value = attribute[key];
-            
-            // If its string then match for any key and push the attribute's name into _attribute
-            if(typeof(_value) === "string" && _value.match(/\{[^{}\s]*\}/gm)) {
+            element.append(child);
 
-                _attribute.push(key);
+        }
+
+        for(const attribute in attributes) {
+            
+            const value = attributes[attribute];
+            const valueType = typeof(value);
+
+            if(valueType === "string" && value.match(/\{[^{}\s]*\}/gm)) {
+
+                attributeList.push(attribute);
 
             }
-            else if(typeof(_value) === "function") {
+            else if(valueType === "function") {
 
-                // Is the value is function then bind events
-                _value = this.#event(_value);
+                const eventName = (attribute.indexOf("on") == 0 ? attribute.replace("on", "") : attribute);
+                element.addEventListener(eventName, value.bind(this));
+                continue;
 
-            };
+            }
 
-            // Set attribute's value
-            _element.setAttribute(key, _value);
+            element.setAttribute(attribute, value);
 
         };
 
-        // Iterate for all attribute that have key
-        for(var i = 0, ilen = _attribute.length; i < ilen; i++) {
+        for(const attribute of attributeList) {
 
-            // Get key and attribute value
-            let _value = _element.getAttribute(_attribute[i]);
-            let _match = _value.match(/\{[^{}\s]*\}/gm);
+            const value = element.getAttribute(attribute);
+            const match = value.match(/\{[^{}\s]*\}/gm);
 
-            // If it contain any key then iterate for all those keys and append it to binding
-            if(_match !== null) {
-                for(var j = 0, jlen = (_match == null) ? 0 : _match.length; j < jlen; j++) {
+            if(match) {
+                for(const item of match) {
 
-                    // Create new binding if undefined
-                    if(typeof(this.#binding[_match[j]]) === "undefined") {
-                        this.#binding[_match[j]] = { element: [], data: _match[j] };
+                    if(typeof(this.#binding[item]) === "undefined") {
+                        this.#binding[item] = { element: [], data: item };
                     };
-                    this.#binding[_match[j]].element.push({ node: _element, type: "A", name: _attribute[i], map: _value });
+                    this.#binding[item].element.push({ node: element, type: "A", name: attribute, map: value });
 
-                };
-            };
+                }
+            }
 
-        };
+        }
 
-        // Return element
-        return _element;
+        return element;
 
     }
 
@@ -231,22 +224,25 @@ export default class H12 {
         * @param {any} args
         * @returns {Promise<H12 | undefined>}
     */
-    async component(node = null, child = [], args = {}) {
+    async component(node = null, children = [], args = {}) {
 
         if(node instanceof Object) {
 
-            const _component = new node();
-            _component.parent = this;
-            _component.args = args;
-            _component.args.child = child[0];
+            /**
+             * @type {H12}
+            */
+            const component = new node();
+            component.parent = this;
+            component.args = args;
+            component.args.child = children[0];
 
             if(typeof(args.id) !== "undefined") {
-                _component.id = args.id;
-            };
+                component.id = args.id;
+            }
 
-            this.child[(typeof(args.id) !== "undefined") ? args.id : _component.id] = _component;
+            this.child[(typeof(args.id) !== "undefined") ? args.id : component.id] = component;
 
-            return await _component.pre(null, args);
+            return await component.pre(null, args);
 
         };
 
@@ -258,10 +254,10 @@ export default class H12 {
         * @param {*} value 
         * @returns {boolean}
     */
-    #vtype(value = "") {
+    #valueType(value = "") {
         if(typeof(value) === "bigint" || typeof(value) === "boolean" || typeof(value) === "number" || typeof(value) === "string") {
             return true;
-        };
+        }
         return false;
     }
 
@@ -270,94 +266,92 @@ export default class H12 {
         * @param {Function} event 
         * @returns {string}
     */
-    #event(event = null) {
-        let _id = crypto.randomUUID();
-        $fx[_id] = event.bind(this);
-        return `$fx['${_id}'](this);`;
+    #eventBind(event = null) {
+        const id = crypto.randomUUID();
+        $fx[id] = event.bind(this);
+        return `$fx['${id}'](event, this);`;
     }
     
     /**
         * 
         * @param {string} key 
         * @param {string | Element | Function} value 
+        * @param {H12} component
     */
-    Set(key = "", value = "") {
+    set(key = "", value = "", component) {
+
+        if(component) {
+            for(const id in this.child) {
+                if(this.child[id] instanceof component) {
+                    delete this.child[id];
+                }
+            }
+        }
 
         // Get position index and remove from key
-        let _index = key.indexOf("++");
+        const index = key.indexOf("++");
         key = key.replace("++", "");
 
         // Get binding and check it
-        let _bind = this.#binding[key];
-        if(typeof(_bind) === "undefined") {
+        const binding = this.#binding[key];
+        if(typeof(binding) === "undefined") {
             return null;
-        };
+        }
 
         // Check if the value is function, if so then bind the event
         if(typeof(value) === "function") {
-            value = this.#event(value);
-        };
+            value = this.#eventBind(value);
+        }
 
         // Iterate for all binding elements
-        let _element = _bind.element;
-        for(var i = 0, ilen = _element.length; i < ilen; i++) {
+        const elements = binding.element;
+        for(const element of elements) {
 
             /** @type {Element} */
-            let _node = _element[i].node;
+            const node = element.node;
+            const parent = (element.parent) ? element.parent : node.parentNode;
 
-            // If the element type is text, element or attribute
-            if(_element[i].type == "T") {
+            if(element.type == "T") {
 
                 // Check if the new value is element or text
                 if(value instanceof Element) {
 
-                    // Create node clone
-                    let _clone = value.cloneNode(true);
-
                     // Replace the text node with element
-                    _node.parentNode.replaceChild(_clone, _node);
+                    parent.replaceChild(value, node);
 
                     // Update the binding
-                    _element[i].type = "E";
-                    _element[i].node = _clone;
+                    element.type = "E";
+                    element.node = value;
 
                 }
-                else if(this.#vtype(value)) {
+                else if(this.#valueType(value)) {
 
                     // Check for append position and insert text
                     // Avoid updating the binding value
-                    if(_index < 0) {
-                        _node.nodeValue = value;
+                    if(index < 0) {
+                        node.nodeValue = value;
                     }
                     else {
-                        _node.nodeValue = _index === 0 ? value + _node.nodeValue : _node.nodeValue + value;
-                    };
+                        node.nodeValue = index === 0 ? value + node.nodeValue : node.nodeValue + value;
+                    }
 
-                };
+                }
+
             }
-            else if(_element[i].type == "E") {
-
-                // Get parent element
-                const _parent = _node.parentNode;
-
+            else if(element.type == "E") {
+                
                 // Check if the new value is element or text
                 if(value instanceof Element) {
 
                     // Check for position for insertign element
-                    let _position = (_index == 0) ? "afterbegin" : "beforeend";
-
-                    // Create clone and get type
-                    // Why cloning ? While adding multiple same elements it will render so it the cloning is required
-                    // Yes the registered events will not be copied to cloned elements
-                    let _clone = value.cloneNode(true);
-                    let _type = (value instanceof Element) ? "insertAdjacentElement" : "insertAdjacentHTML";
+                    let position = (index == 0) ? "afterbegin" : "beforeend";
 
                     // Check the position defined then append it at certain position and avoid removing clone by `continue`
-                    if(_position !== -1) {
+                    if(index !== -1) {
 
                         // Append clone and continue
-                        _parent[_type](_position, _clone);
-                        _element[i].clone.push(_clone);
+                        parent.insertAdjacentElement(position, value);
+                        element.clone.push(value);
 
                         // Ignore the removing of clones
                         continue;
@@ -366,67 +360,67 @@ export default class H12 {
                     else {
 
                         // Replace the current child and update the binding value
-                        _parent.replaceChild(_clone, _node);
-                        _element[i].node = _clone;
+                        parent.replaceChild(value, node);
+                        element.node = value;
 
-                    };
+                    }
                     
                 }
-                else if(this.#vtype(value)) {
+                else if(this.#valueType(value)) {
 
                     // Create new text node and replace it with the old node
-                    const _text = document.createTextNode(value);
-                    _parent.replaceChild(_text, _node);
+                    const textNode = document.createTextNode(value);
+                    parent.replaceChild(textNode, node);
 
                     // Update the element binding
-                    _element[i].type = "T";
-                    _element[i].node = _text;
+                    element.type = "T";
+                    element.node = textNode;
 
-                };
+                }
 
                 // Remove all clones if the value is not appending or if value type changes
-                _element[i].clone.forEach(x => {
+                element.clone.forEach(x => {
                     x.remove();
-                });
-                _element[i].clone = [];
+                })
+                element.clone = [];
 
             }
-            else if(_element[i].type == "A" && this.#vtype(value)) {
+            else if(element.type == "A") {
 
                 // Get the mapping pattern for the attribute value and match the key
-                let _map = _element[i].map;
-                let _match = _map.match(/\{[^{}\s]*\}/gm);
+                let elementMapping = element.map;
+                let keyMatch = elementMapping.match(/\{[^{}\s]*\}/gm);
 
                 // If the match is success full, then iterate over all keys
-                if(_match !== null) {
-                    for(var j = 0, jlen = _match.length; j < jlen; j++) {
+                if(keyMatch) {
+                    for(const keyFound of keyMatch) {
 
                         // If the key is same as the current matched key in map then replace
                         // it can ignore other steps
-                        if(_match[j] === key) {
-                            _map = _map.replace(_match[j], value);
+                        if(keyFound === key) {
+                            elementMapping = elementMapping.replace(keyFound, value);
                             continue;
-                        };
+                        }
 
                         // If the binding contain more keys then search for other key's value
-                        let _subBind = this.#binding[_match[j]];
-                        if(typeof(_subBind) === "undefined") {
+                        const subKeyBinding = this.#binding[keyFound];
+                        if(typeof(subKeyBinding) === "undefined") {
                             continue;
                         };
 
-                        // Mkae a new attribute value
-                        _map = _map.replace(_match[j], _subBind.data);
+                        // Make a new attribute value
+                        elementMapping = map.replace(keyFound, subKeyBinding.data);
 
-                    };
-                };
+                    }
+                }
 
                 // Set the new attribute value and update the binding data
-                _node.setAttribute(_element[i].name, _map);
-                _bind.data = value;
+                node.setAttribute(element.name, elementMapping);
+                this.#binding[key].data = value;
 
-            };
+            }
 
-        };
+        }
 
     }
 
@@ -435,7 +429,7 @@ export default class H12 {
         * @param {string} key 
         * @returns { null | string }
     */
-    Get(key = "") {
+    get(key = "") {
         return typeof(this.#binding[key]) === "undefined" ? undefined : this.#binding[key].data;
     }
 
@@ -454,18 +448,18 @@ export default class H12 {
     }
 
     /**
-        * Render the component into element
+        * Load the component into element
         * @param {H12} component 
         * @param {string} element 
     */
-    static async Render(component = null, element = null) {
+    static async load(component = null, element = null) {
         try {
-            const _component = new component();
-            await _component.pre(element);
+            const instance = new component();
+            await instance.pre(element);
         }
-        catch(exception) {
-            console.error(`H12.Render(): Component error\n${exception.stack}`);
-        };
+        catch(error) {
+            console.error(error);
+        }
     }
 
 };
