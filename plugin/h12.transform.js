@@ -16,10 +16,9 @@ const PLACEHOLDER_KEY = "__KEY__";
 */
 function main(code = "", ignoreCheck = false) {
 
-    if(!code.includes("@Component") && !ignoreCheck) {
+    if(!code.includes("<>") && !code.includes("</>") && !ignoreCheck) {
         return code;
     };
-    code = code.replace(/@Component/g, "");
 
     let matchTemplate = XRegExp.matchRecursive(code, "<>", "</>", "gi");
     for(const template of matchTemplate) {

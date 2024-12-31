@@ -56,34 +56,48 @@ export default class H12 {
         */
         this.element = {};
 
+        /**
+            * A key-value pairs with setter functions for each key.
+            * Alternatively, the `set()` function can be used to update values.
+            * 
+            * @type {Object<string, function(value: any): void>}
+        */
+        this.key = {};
+
     }
+
     /**
         * A private object used to store bindings for the component.
         * - `element`: An array of elements associated with the binding.
         * - `data`: Data of the key.
-        * - For text bindings, the `type` will be `"T"`.
-        * - For attribute bindings, the `type` will be `"A"`.
-        * - For element bindings, the `type` will be `"E"`.
+        * - For text bindings, the `type` will be `0`.
+        * - For element bindings, the `type` will be `1`.
+        * - For attribute bindings, the `type` will be `2`.
         * 
         * @private
-        * @type {Object<string, { element: Array<{ node: Element | Text, type: "T" | "E" | "A", parent?: Element, clone?: Element[], name?: string, map?: string }>, data: string }>}
+        * @type {Object<string, { element: Array<{ node: Element | Text, type: 0 | 1 | 2, parent?: Element, clone?: Element[], name?: string, map?: string }>, data: string }>}
     */
     #binding = {};
-
 
     /**
         * Adds a binding for the specified key with the associated data.
         * If the key doesn't already exist in the `#binding` object, it is initialized with an empty `element` array.
         * 
+        * - For text bindings, the `type` will be `0`.
+        * - For element bindings, the `type` will be `1`.
+        * - For attribute bindings, the `type` will be `2`.
+        * 
         * @private
         * @param {string} key - The key for the binding.
-        * @param {{ node: Element | Text, type: "T" | "E" | "A", parent?: Element, clone?: Element[], name?: string, map?: string }} data - The data to be bound to the key.
+        * @param {{ node: Element | Text, type: 0 | 1 | 2, parent?: Element, clone?: Element[], name?: string, map?: string }} data - The data to be bound to the key.
     */
     #bind(key, data) {
-        if(!this.#binding[key]) {
-            this.#binding[key] = { element: [], data: "" };
-        }
+
+        if (!this.key[key]) this.key[key.split("{")[1].split("}")[0]] = (value) => this.set(key, value);
+
+        if (!this.#binding[key]) this.#binding[key] = { element: [], data: "" };
         this.#binding[key].element.push(data);
+
     }
 
     /**
@@ -193,7 +207,7 @@ export default class H12 {
 
         const element = document.createElement(type);
 
-        for(const child of children) {
+        children.forEach(child => {
 
             const type = typeof(child);
             if(type === "string") {
@@ -201,61 +215,46 @@ export default class H12 {
                 const textNode = document.createTextNode(child);
                 element.append(textNode);
 
-                if(!keys || !keys.includes(child)) {
-                    continue;
-                }
+                if (!keys || !keys.includes(child)) return;
 
-                this.#bind(child, { node: textNode, type: "T", parent: textNode.parentNode, clone: [] });
-
-                continue;
+                this.#bind(child, { node: textNode, type: 0, parent: textNode.parentNode, clone: [] });
 
             }
             else if(type === "function") {
                 element.append(child.bind(this)());
-                continue;
+            }
+            else {
+                element.append(child);
             }
 
-            element.append(child);
+        });
+
+        Object.entries(attributes).forEach(([attribute, { keys, value }]) => {
+
+            if (keys) keys.forEach(key => this.#bind(key, { node: element, type: 2, name: attribute, map: value }));
+    
+            if (typeof value === "function") {
+                const isEvent = attribute.startsWith("on");
+                isEvent ? element.addEventListener(attribute.slice(2), value.bind(this)) : element.setAttribute(attribute, value());
+            }
+            else {
+                element.setAttribute(attribute, value);
+            }
             
-        }
-
-        for(const attribute in attributes) {
-            
-            const keys = attributes[attribute].keys;
-            const value = attributes[attribute].value;
-
-            if(keys) {
-                for(const key of keys) {
-                    this.#bind(key, { node: element, type: "A", name: attribute, map: value });
-                }
-            }
-
-            if(typeof(value) === "function") {
-                const isEvent = attribute.indexOf("on") == 0;
-                if(isEvent) {
-                    element.addEventListener(attribute.replace("on", ""), value.bind(this));
-                }
-                else {
-                    element.setAttribute(attribute, value());
-                }
-                continue;
-            }
-
-            element.setAttribute(attribute, value);
-
-        };
+        });
 
         return element;
 
     }
+
     /**
-     * Creates and initializes a child component, passing arguments and optionally associating it with a parent.
-     * 
-     * @param {H12} node - The class constructor of the component to instantiate.
-     * @param {Array<Element> | Function} children - An array of child elements for the child component.
-     * @param {any} args - Arguments to be passed to the child component during initialization.
-     * 
-     * @returns {H12 | undefined} An initialized component or `undefined` if no valid node is provided.
+        * Creates and initializes a child component, passing arguments and associating it with a parent.
+        * 
+        * @param {H12} node - The class constructor of the component to instantiate.
+        * @param {Array<Element> | Function} children - An array of child elements for the child component.
+        * @param {any} args - Arguments to be passed to the child component during initialization.
+        * 
+        * @returns {H12 | undefined} An initialized component or `undefined` if no valid node is provided.
     */
     component(node = null, children = [], args = {}) {
         if(node instanceof Object) {
@@ -264,15 +263,14 @@ export default class H12 {
             const component = new node();
 
             component.id = id || component.id;
-            component.parent = this;
             component.args = { ... args, child: children[0] };
+            component.parent = this;
 
             this.child[id || component.id] = component;
             return component.init(null, args);
 
-        };
+        }
     }
-
 
     /**
         * Checks if the provided value is of a valid type.
@@ -325,33 +323,27 @@ export default class H12 {
         const fValue = typeof(value) === "function" ? value() : value;
 
         const elements = mapping.element;
-        for(const element of elements) {
+        elements.forEach(element => {
 
             const node = element.node;
-            const parent = (element.parent) ? element.parent : node.parentNode;
+            const parent = element.parent || node.parentNode;
 
-            if(element.type == "T") {
+            if(element.type == 0) {
                 if(value instanceof Element) {
                     parent.replaceChild(value, node);
-                    element.type = "E";
+                    element.type = 1;
                     element.node = value;
                 }
                 else if(this.#isValidType(value)) {
-                    if(index < 0) {
-                        node.nodeValue = fValue;
-                    }
-                    else {
-                        node.nodeValue = index === 0 ? fValue + node.nodeValue : node.nodeValue + fValue;
-                    }
+                    node.nodeValue = index < 0 ? fValue : (index === 0 ? fValue + node.nodeValue : node.nodeValue + fValue);
                 }
             }
-            else if(element.type == "E") {
+            else if(element.type == 1) {
                 if(value instanceof Element) {
-                    let position = (index == 0) ? "afterbegin" : "beforeend";
                     if(index !== -1) {
-                        node.insertAdjacentElement(position, value);
+                        node.insertAdjacentElement((index == 0) ? "afterbegin" : "beforeend", value);
                         element.clone.push(value);
-                        continue;
+                        return;
                     }
                     else {
                         parent.replaceChild(value, node);
@@ -361,38 +353,33 @@ export default class H12 {
                 else if(this.#isValidType(value)) {
                     const textNode = document.createTextNode(fValue);
                     parent.replaceChild(textNode, node);
-                    element.type = "T";
+                    element.type = 0;
                     element.node = textNode;
                 }
                 element.clone.forEach(x => {
                     x.remove();
-                })
+                });
                 element.clone = [];
             }
-            else if(element.type == "A") {
-                if(!this.#isValidType(value)) {
-                    continue;
-                }
+            else if(element.type == 2 && this.#isValidType(value)) {
                 let elementMapping = element.map;
                 let keyMatch = elementMapping.match(/\{[^{}\s]*\}/gm);
                 if(keyMatch) {
-                    for(const keyFound of keyMatch) {
+                    keyMatch.forEach(keyFound => {
                         if(keyFound === key) {
                             elementMapping = elementMapping.replace(keyFound, value);
-                            continue;
                         }
-                        const subKeyBinding = this.#binding[keyFound];
-                        if(!subKeyBinding) {
-                            continue;
+                        else {
+                            const subKeyBinding = this.#binding[keyFound];
+                            if (subKeyBinding) elementMapping = elementMapping.replace(keyFound, subKeyBinding.data);
                         }
-                        elementMapping = elementMapping.replace(keyFound, subKeyBinding.data);
-                    }
+                    });
                 }
                 node.setAttribute(element.name, elementMapping);
                 this.#binding[key].data = value;
             }
 
-        }
+        });
 
     }
 
@@ -405,7 +392,7 @@ export default class H12 {
         * @returns { null | string }
     */
     get(key = "") {
-        return (!this.#binding[key]) ? null : this.#binding[key].data;
+        return this.#binding[key]?.data || null;
     }
 
     /**

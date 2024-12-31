@@ -1,14 +1,14 @@
 import "@style/main.css";
 import H12 from "@library/h12";
 
-@Component
 class App extends H12 {
     constructor() {
         super();
-        this.count = 0;
+        this.num = 0;
     }
     main(args) {
-        this.set("{count}", this.count);
+        const { count } = this.key;
+        count(this.num);
     }
     render() {
         return <>
@@ -21,8 +21,8 @@ class App extends H12 {
         </>;
     }
     increment() {
-        this.count++;
-        this.set("{count}", this.count);
+        const { count } = this.key;
+        count(++this.num);
     }
 };
 
