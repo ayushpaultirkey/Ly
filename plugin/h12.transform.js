@@ -1,177 +1,214 @@
 import XRegExp from "xregexp";
 import { JSDOM } from "jsdom";
+import fs from "fs";
+
+const PLACEHOLDER_CODE = "__CODE__";
+const PLACEHOLDER_KEY = "__KEY__";
 
 /**
     * H12 transform function
     * @param {string} code The js code containing H12 component
     * @returns {string}
     * @description
-    * * Client version: `v2.1.0`
-    * * Transform version: `v2.1.0`
+    * * Transform version: `v2.2.0`
+    * * Client version required: `v2.2.0`
     * * Github: https://github.com/ayushpaultirkey/h12
 */
 function main(code = "", ignoreCheck = false) {
 
-    // Check if the code is h12 component
     if(!code.includes("@Component") && !ignoreCheck) {
         return code;
     };
     code = code.replace(/@Component/g, "");
 
-    //Get all template element
-    //const matchTemplate = code.matchAll(/<>(.*?)<\/>/gs);
     let matchTemplate = XRegExp.matchRecursive(code, "<>", "</>", "gi");
-    for(let template of matchTemplate) {
+    for(const template of matchTemplate) {
 
-        let templateOriginal = "<>" + template + "</>";
+        let { list: brackets, text } = preFormatBrackets(template);
 
-        let matchBracket = XRegExp.matchRecursive(template, "{", "}", "gi");
+        const dom = new JSDOM(text);
+        let pharsed = phraseDOM(dom.window.document.body.children[0]);
 
-        let placeholderIndex = 0;
-        let placeholderList = [];
-        for(const bracket of matchBracket) {
-
-            if(bracket.match(/\s/gm)) {
-                template = template.replace(`{${bracket}}`, `{@PLACEHOLDER${placeholderIndex}}`);
-                placeholderList.push(bracket);
-                placeholderIndex++;
-            };
-
-        };
-
-        let dom = new JSDOM(template);
-        let pharsed = phrase(dom.window.document.body.children[0]);
-
-        placeholderIndex = 0;
-        for(const placeholder of placeholderList) {
-            if(pharsed.includes(`{@PLACEHOLDER${placeholderIndex}}_@SCOPE`)) {
-                pharsed = pharsed.replace(`{@PLACEHOLDER${placeholderIndex}}_@SCOPE`, placeholder.trim());
-            }
-            else {
-                pharsed = pharsed.replace(`@PLACEHOLDER${placeholderIndex}`, placeholder.trim());
-            }
-            placeholderIndex++;
-        };
-
-
-        if(pharsed.includes("<>") && pharsed.includes("</>")) {
-            code = code.replace(templateOriginal, main(pharsed, true));
-        }
-        else {
-            code = code.replace(templateOriginal, pharsed);
+        for(const bracket in brackets) {
+            pharsed = pharsed.replace(bracket.replace(/\{|\}/g, ""), brackets[bracket]);
         }
 
-    };
+        const haveSubTemplate = pharsed.includes("<>") && pharsed.includes("</>");
+        code = code.replace(`<>${template}</>`, (haveSubTemplate) ? main(pharsed, true) : pharsed);
+
+    }
 
     return code;
 
 }
 
-function phrase(element = document.body) {
+function preFormatBrackets(text = "") {
+
+    const matchBrackets = XRegExp.matchRecursive(text, "{", "}", "gi");
+
+    let index = 0;
+    let bracketList = {};
+
+    for(const bracket of matchBrackets) {
+
+        if(bracket.match(/\s/gm)) {
+
+            const id = `{${PLACEHOLDER_CODE}${index}}`;
+
+            text = text.replace(`{${bracket}}`, id);
+
+            bracketList[id] = bracket;
+            index++;
+
+        };
+
+    };
+
+    return { list: bracketList, text: text };
+
+}
+
+function pharseText(element = document.body) {
+
+    if(!element || element.nodeType != 3) {
+        return;
+    }
+
+    let keyList = [];
+    let textList = [];
+    let value = element.nodeValue;
+
+    if(!value.match(/\w+(?:\.\w+)+|\w+|\S+/gm)) {
+        return;
+    }
+
+    value = value.replace(/\n|\s\s/g, "");
+    const keyMatch = value.match(/\{[^{}\s]*\}/gm);
+
+    if(keyMatch) {
+
+        let tempText = value;
+
+        for(const key of keyMatch) {
+            tempText = tempText.replace(key, PLACEHOLDER_KEY);
+        }
+
+        const textParts = tempText.split(PLACEHOLDER_KEY);
+
+        for(let i = 0; i < keyMatch.length; i++) {
+            textParts.splice(2 * i + 1, 0, keyMatch[i]);
+        }
+        for(const part of textParts) {
+            if(part.length !== 0) {
+                if(part.includes(PLACEHOLDER_CODE)) {
+                    textList.push(part.replace(/\{|\}/g, ""));
+                }
+                else {
+                    textList.push(`\`${part}\``);
+                }
+                if(part.match(/\{[^{}\s]*\}/gm)) {
+                    keyList.push(part);
+                }
+            }
+        }
+
+    }
+    else {
+
+        if(value.includes(PLACEHOLDER_CODE)) {
+            textList.push(value.replace(/\{|\}/g, ""));
+        }
+        else {
+            textList.push(`\`${value}\``);
+        }
+        if(value.match(/\{[^{}\s]*\}/gm)) {
+            keyList.push(value);
+        }
+
+    }
+
+    return { texts: textList, keys: keyList };
+
+}
+
+function pharseAttribute(element = document.body) {
+    
+    if(!element || element.nodeType != 1) {
+        return;
+    }
+
+    let attributeList = [];
+    const attributes = element.getAttributeNames();
+    
+    for(const attribute of attributes) {
+
+        const attributeValue = element.getAttribute(attribute);
+        if((attribute == "args" && attributeValue == "") || attribute == "alias" || attribute == "scope") {
+            continue;
+        }
+
+        const keyMatch = attributeValue.match(/\{[^{}\s]*\}/gm);
+        const filterKey = (keyMatch) ? keyMatch.filter(x => !x.includes(PLACEHOLDER_CODE)) : [];
+
+        if(attributeValue.includes(PLACEHOLDER_CODE)) {
+            attributeList.push(`"${attribute}": { "value": ${attributeValue.replace(/\{|\}/g, "")}, "keys": ${JSON.stringify(filterKey)} }`);
+        }
+        else {
+            attributeList.push(`"${attribute}": { "value": \`${attributeValue}\`, "keys": ${JSON.stringify(filterKey)} }`);
+        }
+
+    }
+
+    return { attributes: attributeList };
+    
+}
+
+function pharseNode(element = document.body) {
+    
+    if(!element) {
+        return;
+    }
+
+    let keyList = [];
+    let childList = [];
+    const childNodes = element.childNodes;
+
+    for(const child of childNodes) {
+        switch(child.nodeType) {
+            case 1:
+                const node = phraseDOM(child);
+                if(node) {
+                    childList.push(node);
+                }
+                break;
+            case 3:
+                const text = pharseText(child);
+                if(text && text.texts) {
+                    childList = childList.concat(text.texts);
+                    keyList = keyList.concat(text.keys);
+                }
+                break;
+        }
+    }
+
+    return { child: childList, keys: keyList };
+    
+}
+
+function phraseDOM(element = document.body) {
 
     if(!element) {
         return "";
     }
 
-    // Get elements values
-    const childNodes = element.childNodes;
-    const attributes = element.getAttributeNames();
+    const childs = pharseNode(element);
+    const childCode = `[${childs.child.join(",")}]`;
 
-    const attributeList = [];
-    for(const attribute of attributes) {
+    const attributes = pharseAttribute(element);
+    const attributeCode = `{${attributes.attributes.join(",")}}`;
 
-        const attributeValue = element.getAttribute(attribute);
-        if((attribute == "args" && attributeValue == "") || attribute == "ref" || attribute == "scope") {
-            continue;
-        }
-
-        if(attributeValue.includes("@PLACEHOLDER")) {
-            attributeList.push(`"${attribute}": ${attributeValue.replace(/\{|\}/g, "")}`);
-        }
-        else {
-            attributeList.push(`"${attribute}": \`${attributeValue}\``);
-        }
-
-    }
-
-    const childList = [];
-    for(var i = 0, ilen = childNodes.length; i < ilen; i++) {
-
-        const child = childNodes[i];
-        
-        if(child.nodeType === 3) {
-
-            const textValue = child.nodeValue;
-            const textMatch = textValue.match(/\w+(?:\.\w+)+|\w+|\S+/gm);
-
-            if(textMatch) {
-
-                let text = textValue.replace(/\n|\s\s/g, "");
-
-                let keyMatch = text.match(/\{[^{}\s]*\}/gm);
-                if(keyMatch) {
-
-                    let keyPlaceholder = "@SPLIT";
-                    let textModified = text;
-                    keyMatch.forEach(match => {
-                        textModified = textModified.replace(match, keyPlaceholder);
-                    });
-
-                    const textParts = textModified.split(keyPlaceholder);
-
-                    for(let j = 0; j < keyMatch.length; j++) {
-                        textParts.splice(2 * j + 1, 0, keyMatch[j]);
-                    }
-                    for(let j = 0; j < textParts.length; j++) {
-                        if(textParts[j].length !== 0) {
-                            if(textParts[j].includes("@PLACEHOLDER")) {
-                                childList.push(textParts[j].replace(/\{|\}/g, ""));
-                            }
-                            else {
-                                childList.push("`" + textParts[j] + "`");
-                            }
-                        }
-                    }
-
-                }
-                else {
-                    childList.push("`" + text + "`");
-                }
-
-            }
-
-        }
-        else {
-            childList.push(phrase(child));
-        }
-
-    }
-
-    const childCode = `[${childList.join(",")}]`;
-    const attributeCode = `{${attributeList.join(",")}}`;
-
-    const hasScope = element.hasAttribute("scope");
-    const hasReference = element.hasAttribute("ref");
-    const isComponent = element.hasAttribute("args");
-
-    const scope = (isComponent && hasScope) ? element.getAttribute("scope") + "_@SCOPE" :  "this";
-    const method = isComponent ? "component" : "node";
-    const isAsync = isComponent ? "await" : "";
-
-    let tagName = element.tagName.toLowerCase();
-    if(isComponent) {
-        if(hasReference) {
-            tagName = element.getAttribute("ref");
-        }
-        else {
-            tagName = tagName.charAt(0).toUpperCase() + tagName.slice(1);
-        }
-    }
-    else {
-        tagName = `"${tagName}"`;
-    }
-
-    const code = `${isAsync} ${scope}.${method}(${tagName},${childCode},${attributeCode})`;
+    const parent = `"${element.tagName.toLowerCase()}"`;
+    const code = `this.node(${parent},${childCode},${attributeCode},${JSON.stringify(childs.keys)})`;
 
     return code.replace(/,\)/g, ")");
 

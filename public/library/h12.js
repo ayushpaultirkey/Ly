@@ -1,423 +1,395 @@
-window.$fx = {};
-
 /**
     * H12 component class
     * @description
-    * * Client version: `v2.1.0`
-    * * Transform version: `v2.1.0`
+    * * Client version: `v2.2.0`
+    * * Transform version required: `v2.2.0`
     * * Github: https://github.com/ayushpaultirkey/h12
 */
 export default class H12 {
-    constructor() {
-        
-        /** @type {string} */
-        this.id = crypto.randomUUID();
 
-        /** @type {Element} */
+    constructor() {
+
+        /**
+            * The unique identifier for the component. 
+            * This ID is automatically generated using `H12.raid()` and should not be manually updated or changed 
+            * after the component is rendered.
+            * 
+            * @type {string}
+        */
+        this.id = H12.raid();
+
+         /**
+            * The root element associated with this component.
+            * 
+            * @type {Element}
+        */
         this.root = null;
 
-        /** @type {any} */
+        /**
+            * Arguments passed to the component, which can be used to initialize or configure the component.
+            * This object can store any data passed during initialization.
+            * 
+            * @type {any}
+        */
         this.args = {};
 
-        /** @type {H12} */
+         /**
+            * The parent component of this instance.
+            * This is used to refer to the component's parent within a hierarchical structure.
+            * 
+            * @type {H12}
+        */
         this.parent = null;
 
-        /** @type {Object<string, H12>} */
+        /**
+            * A collection of child components.
+            * The keys in this object represent identifiers, and the values are instances of child components (`H12`).
+            * 
+            * @type {Object<string, H12>}
+        */
         this.child = {};
 
-        /** @type {Object<string, Element>} */
+        /**
+            * A collection of unique elements associated with this component.
+            * 
+            * @type {Object<string, Element>}
+        */
         this.element = {};
 
     }
-
+    /**
+        * A private object used to store bindings for the component.
+        * - `element`: An array of elements associated with the binding.
+        * - `data`: Data of the key.
+        * - For text bindings, the `type` will be `"T"`.
+        * - For attribute bindings, the `type` will be `"A"`.
+        * - For element bindings, the `type` will be `"E"`.
+        * 
+        * @private
+        * @type {Object<string, { element: Array<{ node: Element | Text, type: "T" | "E" | "A", parent?: Element, clone?: Element[], name?: string, map?: string }>, data: string }>}
+    */
     #binding = {};
 
+
     /**
-        * Create's a render template for the element
-        * @async
-        * @returns {Promise<Element | null>}
+        * Adds a binding for the specified key with the associated data.
+        * If the key doesn't already exist in the `#binding` object, it is initialized with an empty `element` array.
+        * 
+        * @private
+        * @param {string} key - The key for the binding.
+        * @param {{ node: Element | Text, type: "T" | "E" | "A", parent?: Element, clone?: Element[], name?: string, map?: string }} data - The data to be bound to the key.
+    */
+    #bind(key, data) {
+        if(!this.#binding[key]) {
+            this.#binding[key] = { element: [], data: "" };
+        }
+        this.#binding[key].element.push(data);
+    }
+
+    /**
+        * This function is called after the component is built and ready to be rendered.
+        * 
+        * @param {*} args - The arguments passed by the `pre()` function. Alternatively, 
+        * these can be accessed via `this.args`.
+        * 
         * @example
-        * async render() {
-        *   return <>
-        *       <div>Hello world</div>
-        *   </>
-        * }
-        * Will be converted to:
-        * async render() {
-        *   return this.node("div", ["Hello world"])
+        * async main(args = {}) {
+        *   this.set("{color}", "red");
         * }
     */
-    async render() {
+    main(args = {}, callback) {}
+
+    /**
+        * Creates a render template for the element.
+        * 
+        * @returns {Element | null} The rendered element or `null` if rendering fails.
+        * 
+        * @example
+        * // Example usage:
+        * render() {
+        *   return <>
+        *       <div>Hello world</div>
+        *   </>;
+        * }
+        * 
+        * // This will be converted to:
+        * render() {
+        *   return this.node("div", ["Hello world"]);
+        * }
+    */
+    render() {
         return this.node("div");
     }
 
     /**
-        * This function is called after component build and is ready to be rendered.
-        * @async
-        * @param {*} args The arguments passed by the `pre()` function, alternatively it can also be accessed by `this.args`
-        * @example
-        * async init(args = {}) {
-        *   this.set("{color}", "red");
-        * }
-    */
-    async init(args = {}) {}
-
-    /**
-        * This function is called after the component is rendered. This only work on root component, the child component wont call this function.
-        * To use this you can register a dispatcher event.
-        * 
-        * @async
+        * This function is called after the component is rendered. 
+        * It only works on the root component; child components do not call this function.
+        * To use this, you can register a dispatcher event.
+        *
         * @example
         * async finally(args = {}) {
-        *   console.log(this.id, "loaded !");
+        *   console.log(this.id, "loaded!");
         * }
     */
-    async finally() {}
-    
+    finally() {}
+
     /**
-        * Preapre the component for rendering and initialize the values.
-        * @async
-        * @param {string} element The element's query selector
-        * @param {*} args The argument to be passed while creating component
-        * @returns {Promise<Element, null>}
+        * Prepares the component for rendering and initializes the values.
+        * 
+        * @param {string} element - The query selector of the element.
+        * @param {*} args - The arguments to be passed while creating the component.
+        * @returns {Element|null} A promise that resolves to the initialized element or `null` if initialization fails.
         * 
         * @example
         * const app = new App();
         * app.pre(".root");
     */
-    async pre(element = null, args = {}) {
+    init(element = null, args = {}) {
 
-        // Try and render the component
         try {
 
-            // Create the root element for the component and find the unique id
-            this.root = await this.render();
+            this.root = this.render();
             this.#unique("id", this.element);
 
-            // If the arguments contain child then try to set the {child} key
-            // It is usually passed is the component tag have a child element
             if(this.args.child instanceof Element) {
                 this.set("{child}", this.args.child);
             }
 
-            // Initialize the component
-            await this.init(args);
-            
-            // If the element is not null then render it
-            if(element !== null) {
+            this.main(args);
+
+            if(element) {
                 document.querySelector(element).appendChild(this.root);
-                await this.finally();
+                this.finally();
             }
 
-            // Else return the root node
             return this.root;
-
+            
         }
         catch(error) {
             console.error(error);
         };
 
+
     }
 
     /**
-        * Create a element to render it along with bindings.
-        * `1 | T`: Text, 
-        * `2 | E`:  Element, 
-        * `3 | A`:  Attribute
-        * 
-        * @param {string} type Element or component name
-        * @param {Array<Element|string>} children Array of child elements or string
-        * @param {Object<string, string | Function>} attribute Object with key as attribute name and with value
-        * @returns {Element}
+        * The node along with its attributes, children and keys.
+        *
+        * @typedef {Object} Node
+        * @param {string} type - The name of the element or component to create.
+        * @param {string[]} children - An array of child elements or strings to include as content.
+        * @param {Object.<string, {value: string, keys: string[]}>} attributes - An object of attribute with their value and kets.
+        * @param {string[]} keys - An array of keys for bindings, used when the current element's text, not its children.
+        * @returns {Element} The created element.
         * 
         * @example
-        * this.node("div", ["Hello world"])
-        * this.node("div", ["Hello world"], { class: "bg-red-500" })
-        * this.node("div", ["Hello world"], { onclick: () => {} })
+        * this.node("div", ["Hello world"]);
+        * this.node("div", ["Hello {name}"], {}, [ "{name}" ]);
+        * this.node("div", ["Hello world"], { class: { value: "bg-red-500" } });
+        * this.node("div", ["Hello world"], { class: { value: "bg-{color}-500", keys: ["color"] } });
+        * this.node("div", ["Hello world"], { onclick: { value: () => {} } });
     */
-    node(type = "", children = [], attributes = {}) {
+    node(type = "", children = [], attributes = {}, keys = []) {
 
         const element = document.createElement(type);
-        const attributeList = [];
 
         for(const child of children) {
-            
-            const childType = typeof(child);
 
-            if(childType === "string") {
+            const type = typeof(child);
+            if(type === "string") {
 
                 const textNode = document.createTextNode(child);
                 element.append(textNode);
 
-                // Match for any possible key
-                // If no key then skip other steps
-                const textMatch = child.match(/\{[^{}\s]*\}/gm);
-                if(!textMatch) {
+                if(!keys || !keys.includes(child)) {
                     continue;
                 }
 
-                // Add binding and continue
-                if(typeof(this.#binding[textMatch[0]]) === "undefined") {
-                    this.#binding[textMatch[0]] = { element: [], data: "" };
-                }
-                this.#binding[textMatch[0]].element.push({ node: textNode, type: "T", parent: textNode.parentNode, clone: [] });
+                this.#bind(child, { node: textNode, type: "T", parent: textNode.parentNode, clone: [] });
+
                 continue;
 
             }
-            else if(childType === "function") {
-                element.append(child());
+            else if(type === "function") {
+                element.append(child.bind(this)());
                 continue;
             }
-            
+
             element.append(child);
-
+            
         }
 
         for(const attribute in attributes) {
             
-            const value = attributes[attribute];
-            const valueType = typeof(value);
+            const keys = attributes[attribute].keys;
+            const value = attributes[attribute].value;
 
-            if(valueType === "string" && value.match(/\{[^{}\s]*\}/gm)) {
-
-                attributeList.push(attribute);
-
+            if(keys) {
+                for(const key of keys) {
+                    this.#bind(key, { node: element, type: "A", name: attribute, map: value });
+                }
             }
-            else if(valueType === "function") {
 
-                const eventName = (attribute.indexOf("on") == 0 ? attribute.replace("on", "") : attribute);
-                element.addEventListener(eventName, value.bind(this));
+            if(typeof(value) === "function") {
+                const isEvent = attribute.indexOf("on") == 0;
+                if(isEvent) {
+                    element.addEventListener(attribute.replace("on", ""), value.bind(this));
+                }
+                else {
+                    element.setAttribute(attribute, value());
+                }
                 continue;
-
             }
 
             element.setAttribute(attribute, value);
 
         };
 
-        for(const attribute of attributeList) {
-
-            const value = element.getAttribute(attribute);
-            const match = value.match(/\{[^{}\s]*\}/gm);
-
-            if(match) {
-                for(const item of match) {
-
-                    if(typeof(this.#binding[item]) === "undefined") {
-                        this.#binding[item] = { element: [], data: item };
-                    };
-                    this.#binding[item].element.push({ node: element, type: "A", name: attribute, map: value });
-
-                }
-            }
-
-        }
-
         return element;
 
     }
-
     /**
-        * 
-        * @param {H12} node 
-        * @param {Array<Element> | Function} child
-        * @param {any} args
-        * @returns {Promise<H12 | undefined>}
+     * Creates and initializes a child component, passing arguments and optionally associating it with a parent.
+     * 
+     * @param {H12} node - The class constructor of the component to instantiate.
+     * @param {Array<Element> | Function} children - An array of child elements for the child component.
+     * @param {any} args - Arguments to be passed to the child component during initialization.
+     * 
+     * @returns {H12 | undefined} An initialized component or `undefined` if no valid node is provided.
     */
-    async component(node = null, children = [], args = {}) {
-
+    component(node = null, children = [], args = {}) {
         if(node instanceof Object) {
-
-            /**
-             * @type {H12}
-            */
+            
+            const id = args.id;
             const component = new node();
+
+            component.id = id || component.id;
             component.parent = this;
-            component.args = args;
-            component.args.child = children[0];
+            component.args = { ... args, child: children[0] };
 
-            if(typeof(args.id) !== "undefined") {
-                component.id = args.id;
-            }
-
-            this.child[(typeof(args.id) !== "undefined") ? args.id : component.id] = component;
-
-            return await component.pre(null, args);
+            this.child[id || component.id] = component;
+            return component.init(null, args);
 
         };
-
     }
 
+
     /**
-        * For checking value types.
-        * `string`, `boolean`, `number`, `string` returns true
-        * @param {*} value 
-        * @returns {boolean}
+        * Checks if the provided value is of a valid type.
+        * Valid types are: `string`, `number`, `boolean`, and `function`.
+        *
+        * @private
+        * @param {*} value - The value to check.
+        * @returns {boolean} `true` if the value is of a valid type; otherwise, `false`.
+        *
+        * @example
+        * this.#isValidType("Hello"); // true
+        * this.#isValidType(42); // true
+        * this.#isValidType(false); // true
+        * this.#isValidType(() => {}); // true
+        * this.#isValidType([]); // false
     */
-    #valueType(value = "") {
-        if(typeof(value) === "bigint" || typeof(value) === "boolean" || typeof(value) === "number" || typeof(value) === "string") {
-            return true;
-        }
-        return false;
+    #isValidType(value) {
+        return ["string", "number", "boolean", "function"].includes(typeof(value));
     }
 
     /**
-        * Bind events into an element
-        * @param {Function} event 
-        * @returns {string}
-    */
-    #eventBind(event = null) {
-        const id = crypto.randomUUID();
-        $fx[id] = event.bind(this);
-        return `$fx['${id}'](event, this);`;
-    }
-    
-    /**
+        * Updates the key's value and modifies any elements containing the corresponding key placeholders.
         * 
-        * @param {string} key 
-        * @param {string | Element | Function} value 
-        * @param {H12} component
+        * If the key has "++" at the end (e.g., `{item}++`), the value will be appended to the existing value.
+        * Similarly, if "++" is placed before the key (e.g., `++{item}`), the value will be prepended to the existing value.
+        * 
+        * Note: If the value type changes (for example, if the current value is text and the new value is an element),
+        * the old value will be replaced instead of being appended due to type incompatibility.
+        * 
+        * @param {string} key - The key that corresponds to the placeholder in the elements.
+        * @param {string | Element | Function} value - The value to be set or the function to generate the value.
+        * 
+        * @example
+        * 
+        * this.set("{item}", "Red"); // value = Red
+        * this.set("{item}++", "Apple"); // value = Red Apple
+        * this.set("++{item}", "Fresh"); // value = Fresh Red Apple
+        * this.set("{item}", <><i>Banana</i></>); // value = Banana
     */
-    set(key = "", value = "", component) {
-
-        if(component) {
-            for(const id in this.child) {
-                if(this.child[id] instanceof component) {
-                    delete this.child[id];
-                }
-            }
-        }
-
-        // Get position index and remove from key
+    set(key = "", value = "") {
+        
         const index = key.indexOf("++");
         key = key.replace("++", "");
-
-        // Get binding and check it
-        const binding = this.#binding[key];
-        if(typeof(binding) === "undefined") {
-            return null;
+        
+        const mapping = this.#binding[key];
+        if(!mapping) {
+            return;
         }
 
-        // Check if the value is function, if so then bind the event
-        if(typeof(value) === "function") {
-            value = this.#eventBind(value);
-        }
+        const fValue = typeof(value) === "function" ? value() : value;
 
-        // Iterate for all binding elements
-        const elements = binding.element;
+        const elements = mapping.element;
         for(const element of elements) {
 
-            /** @type {Element} */
             const node = element.node;
             const parent = (element.parent) ? element.parent : node.parentNode;
 
             if(element.type == "T") {
-
-                // Check if the new value is element or text
                 if(value instanceof Element) {
-
-                    // Replace the text node with element
                     parent.replaceChild(value, node);
-
-                    // Update the binding
                     element.type = "E";
                     element.node = value;
-
                 }
-                else if(this.#valueType(value)) {
-
-                    // Check for append position and insert text
-                    // Avoid updating the binding value
+                else if(this.#isValidType(value)) {
                     if(index < 0) {
-                        node.nodeValue = value;
+                        node.nodeValue = fValue;
                     }
                     else {
-                        node.nodeValue = index === 0 ? value + node.nodeValue : node.nodeValue + value;
+                        node.nodeValue = index === 0 ? fValue + node.nodeValue : node.nodeValue + fValue;
                     }
-
                 }
-
             }
             else if(element.type == "E") {
-                
-                // Check if the new value is element or text
                 if(value instanceof Element) {
-
-                    // Check for position for insertign element
                     let position = (index == 0) ? "afterbegin" : "beforeend";
-
-                    // Check the position defined then append it at certain position and avoid removing clone by `continue`
                     if(index !== -1) {
-
-                        // Append clone and continue
-                        parent.insertAdjacentElement(position, value);
+                        node.insertAdjacentElement(position, value);
                         element.clone.push(value);
-
-                        // Ignore the removing of clones
                         continue;
-
                     }
                     else {
-
-                        // Replace the current child and update the binding value
                         parent.replaceChild(value, node);
                         element.node = value;
-
                     }
-                    
                 }
-                else if(this.#valueType(value)) {
-
-                    // Create new text node and replace it with the old node
-                    const textNode = document.createTextNode(value);
+                else if(this.#isValidType(value)) {
+                    const textNode = document.createTextNode(fValue);
                     parent.replaceChild(textNode, node);
-
-                    // Update the element binding
                     element.type = "T";
                     element.node = textNode;
-
                 }
-
-                // Remove all clones if the value is not appending or if value type changes
                 element.clone.forEach(x => {
                     x.remove();
                 })
                 element.clone = [];
-
             }
             else if(element.type == "A") {
-
-                // Get the mapping pattern for the attribute value and match the key
+                if(!this.#isValidType(value)) {
+                    continue;
+                }
                 let elementMapping = element.map;
                 let keyMatch = elementMapping.match(/\{[^{}\s]*\}/gm);
-
-                // If the match is success full, then iterate over all keys
                 if(keyMatch) {
                     for(const keyFound of keyMatch) {
-
-                        // If the key is same as the current matched key in map then replace
-                        // it can ignore other steps
                         if(keyFound === key) {
                             elementMapping = elementMapping.replace(keyFound, value);
                             continue;
                         }
-
-                        // If the binding contain more keys then search for other key's value
                         const subKeyBinding = this.#binding[keyFound];
-                        if(typeof(subKeyBinding) === "undefined") {
+                        if(!subKeyBinding) {
                             continue;
-                        };
-
-                        // Make a new attribute value
-                        elementMapping = map.replace(keyFound, subKeyBinding.data);
-
+                        }
+                        elementMapping = elementMapping.replace(keyFound, subKeyBinding.data);
                     }
                 }
-
-                // Set the new attribute value and update the binding data
                 node.setAttribute(element.name, elementMapping);
                 this.#binding[key].data = value;
-
             }
 
         }
@@ -425,41 +397,41 @@ export default class H12 {
     }
 
     /**
-        * Get the value of the key, it will only work it the key is of type attribute
+        * Get the value of the key.
+        * 
+        * Note: This method may not always be reliable.
+        * 
         * @param {string} key 
         * @returns { null | string }
     */
     get(key = "") {
-        return typeof(this.#binding[key]) === "undefined" ? undefined : this.#binding[key].data;
+        return (!this.#binding[key]) ? null : this.#binding[key].data;
     }
 
     /**
-        * Create unique element in the component
-        * @param {string} unique 
-        * @param {object} store 
+        * Ensures that elements with the given unique attribute are stored in a specified object,
+        * and updates the attribute to a new random value.
+        * 
+        * @param {string} - The attribute name used to identify unique elements.
+        * @param {Object} - The object where elements are stored, indexed by their `unique` attribute values.
+        * 
+        * @example
+        * // Store all elements with a "id" attribute in `this.elements`
+        * this.#unique("id", this.elements);
     */
     #unique(unique = "id", store = this.element) {
-
         this.root.querySelectorAll(`[${unique}]`).forEach(x => {
             store[x.getAttribute(unique)] = x;
-            x.setAttribute(unique, "x" + Math.random().toString(36).slice(6));
+            x.setAttribute(unique, "x" + H12.raid());
         });
-        
     }
-
     /**
-        * Load the component into element
-        * @param {H12} component 
-        * @param {string} element 
+        * Generates a random string to be used as a new unique identifier.
+        * 
+        * @returns {string} A random string.
     */
-    static async load(component = null, element = null) {
-        try {
-            const instance = new component();
-            await instance.pre(element);
-        }
-        catch(error) {
-            console.error(error);
-        }
+    static raid() {
+        return Math.random().toString(36).slice(6);
     }
 
 };
