@@ -60,7 +60,15 @@ export default class H12 {
             * A key-value pairs with setter functions for each key.
             * Alternatively, the `set()` function can be used to update values.
             * 
+            * Note: The setter functions do not support appending via "++" (i.e., "{key}++").
+            * 
             * @type {Object<string, function(value: any): void>}
+            * 
+            * @example
+            * const { age } = this.key;
+            * age(23);
+            * // Equivalent to
+            * this.set("{age}", 23);
         */
         this.key = {};
 
@@ -165,13 +173,13 @@ export default class H12 {
             this.root = this.render();
             this.#unique("id", this.element);
 
-            if(this.args.child instanceof Element) {
+            if (this.args.child instanceof Element) {
                 this.set("{child}", this.args.child);
             }
 
             this.main(args);
 
-            if(element) {
+            if (element) {
                 document.querySelector(element).appendChild(this.root);
                 this.finally();
             }
@@ -203,14 +211,14 @@ export default class H12 {
         * this.node("div", ["Hello world"], { class: { value: "bg-{color}-500", keys: ["color"] } });
         * this.node("div", ["Hello world"], { onclick: { value: () => {} } });
     */
-    node(type = "", children = [], attributes = {}, keys = []) {
+    node(type = "", children = [], attributes = {}, keys = [], isSVG = false) {
 
-        const element = document.createElement(type);
+        const element = isSVG ? document.createElementNS("http://www.w3.org/2000/svg", type) : document.createElement(type);
 
         children.forEach(child => {
 
             const type = typeof(child);
-            if(type === "string") {
+            if (type === "string") {
 
                 const textNode = document.createTextNode(child);
                 element.append(textNode);
@@ -220,11 +228,8 @@ export default class H12 {
                 this.#bind(child, { node: textNode, type: 0, parent: textNode.parentNode, clone: [] });
 
             }
-            else if(type === "function") {
-                element.append(child.bind(this)());
-            }
             else {
-                element.append(child);
+                element.append(type === "function" ? child.bind(this)() : child);
             }
 
         });
@@ -234,8 +239,7 @@ export default class H12 {
             if (keys) keys.forEach(key => this.#bind(key, { node: element, type: 2, name: attribute, map: value }));
     
             if (typeof value === "function") {
-                const isEvent = attribute.startsWith("on");
-                isEvent ? element.addEventListener(attribute.slice(2), value.bind(this)) : element.setAttribute(attribute, value());
+                attribute.startsWith("on") ? element.addEventListener(attribute.slice(2), value.bind(this)) : element.setAttribute(attribute, value());
             }
             else {
                 element.setAttribute(attribute, value);
@@ -257,7 +261,7 @@ export default class H12 {
         * @returns {H12 | undefined} An initialized component or `undefined` if no valid node is provided.
     */
     component(node = null, children = [], args = {}) {
-        if(node instanceof Object) {
+        if (node instanceof Object) {
             
             const id = args.id;
             const component = new node();
@@ -316,9 +320,8 @@ export default class H12 {
         key = key.replace("++", "");
         
         const mapping = this.#binding[key];
-        if(!mapping) {
-            return;
-        }
+
+        if (!mapping) return;
 
         const fValue = typeof(value) === "function" ? value() : value;
 
@@ -329,18 +332,18 @@ export default class H12 {
             const parent = element.parent || node.parentNode;
 
             if(element.type == 0) {
-                if(value instanceof Element) {
+                if (value instanceof Element) {
                     parent.replaceChild(value, node);
                     element.type = 1;
                     element.node = value;
                 }
-                else if(this.#isValidType(value)) {
+                else if (this.#isValidType(value)) {
                     node.nodeValue = index < 0 ? fValue : (index === 0 ? fValue + node.nodeValue : node.nodeValue + fValue);
                 }
             }
             else if(element.type == 1) {
-                if(value instanceof Element) {
-                    if(index !== -1) {
+                if (value instanceof Element) {
+                    if (index !== -1) {
                         node.insertAdjacentElement((index == 0) ? "afterbegin" : "beforeend", value);
                         element.clone.push(value);
                         return;
@@ -350,7 +353,7 @@ export default class H12 {
                         element.node = value;
                     }
                 }
-                else if(this.#isValidType(value)) {
+                else if (this.#isValidType(value)) {
                     const textNode = document.createTextNode(fValue);
                     parent.replaceChild(textNode, node);
                     element.type = 0;
@@ -364,9 +367,9 @@ export default class H12 {
             else if(element.type == 2 && this.#isValidType(value)) {
                 let elementMapping = element.map;
                 let keyMatch = elementMapping.match(/\{[^{}\s]*\}/gm);
-                if(keyMatch) {
+                if (keyMatch) {
                     keyMatch.forEach(keyFound => {
-                        if(keyFound === key) {
+                        if (keyFound === key) {
                             elementMapping = elementMapping.replace(keyFound, value);
                         }
                         else {
@@ -389,7 +392,7 @@ export default class H12 {
         * Note: This method may not always be reliable.
         * 
         * @param {string} key 
-        * @returns { null | string }
+        * @returns { any | null }
     */
     get(key = "") {
         return this.#binding[key]?.data || null;

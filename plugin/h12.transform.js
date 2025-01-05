@@ -120,6 +120,7 @@ function pharseText(element = document.body) {
         else {
             textList.push(`\`${value}\``);
         }
+
         if(value.match(/\{[^{}\s]*\}/gm)) {
             keyList.push(value);
         }
@@ -142,18 +143,29 @@ function pharseAttribute(element = document.body) {
     for(const attribute of attributes) {
 
         const attributeValue = element.getAttribute(attribute);
-        if((attribute == "args" && attributeValue == "") || attribute == "alias" || attribute == "scope") {
-            continue;
-        }
 
         const keyMatch = attributeValue.match(/\{[^{}\s]*\}/gm);
         const filterKey = (keyMatch) ? keyMatch.filter(x => !x.includes(PLACEHOLDER_CODE)) : [];
 
-        if(attributeValue.includes(PLACEHOLDER_CODE)) {
-            attributeList.push(`"${attribute}": { "value": ${attributeValue.replace(/\{|\}/g, "")}, "keys": ${JSON.stringify(filterKey)} }`);
+        if((attribute == "args" && attributeValue == "") || attribute == "alias" || attribute == "scope") {
+            continue;
+        }
+
+        if(!element.hasAttribute("args")) {
+            if(attributeValue.includes(PLACEHOLDER_CODE)) {
+                attributeList.push(`"${attribute}": { "value": ${attributeValue.replace(/\{|\}/g, "")}, "keys": ${JSON.stringify(filterKey)} }`);
+            }
+            else {
+                attributeList.push(`"${attribute}": { "value": \`${attributeValue}\`, "keys": ${JSON.stringify(filterKey)} }`);
+            }
         }
         else {
-            attributeList.push(`"${attribute}": { "value": \`${attributeValue}\`, "keys": ${JSON.stringify(filterKey)} }`);
+            if(attributeValue.includes(PLACEHOLDER_CODE)) {
+                attributeList.push(`"${attribute}": ${attributeValue.replace(/\{|\}/g, "")}`);
+            }
+            else {
+                attributeList.push(`"${attribute}": \`${attributeValue}\``);
+            }
         }
 
     }
@@ -200,14 +212,36 @@ function phraseDOM(element = document.body) {
         return "";
     }
 
+    const tag = element.tagName.toLowerCase();
+    const isSVG = element.nodeType == 1 && element.namespaceURI == "http://www.w3.org/2000/svg";
+
     const childs = pharseNode(element);
     const childCode = `[${childs.child.join(",")}]`;
 
     const attributes = pharseAttribute(element);
     const attributeCode = `{${attributes.attributes.join(",")}}`;
 
-    const parent = `"${element.tagName.toLowerCase()}"`;
-    const code = `this.node(${parent},${childCode},${attributeCode},${JSON.stringify(childs.keys)})`;
+    const hasScope = element.hasAttribute("scope");
+    const hasAlias = element.hasAttribute("alias");
+    const isComponent = element.hasAttribute("args");
+
+    const scope = (isComponent && hasScope) ? element.getAttribute("scope") + "_@SCOPE" :  "this";
+    const method = isComponent ? "component" : "node";
+
+    let name;
+    if(isComponent) {
+        if(hasAlias) {
+            name = element.getAttribute("alias").replace(/\{|\}/g, "");
+        }
+        else {
+            name = tag.charAt(0).toUpperCase() + tag.slice(1);
+        }
+    }
+    else {
+        name = `"${tag}"`;
+    }
+
+    const code = `${scope}.${method}(${name},${childCode},${attributeCode},${JSON.stringify(childs.keys)},${isSVG})`;
 
     return code.replace(/,\)/g, ")");
 

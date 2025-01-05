@@ -13,9 +13,12 @@ class App extends H12 {
     render() {
         return <>
             <div class="w-full h-full overflow-auto scroll relative">
-                <div class="h-full p-6 flex flex-col justify-center items-center">
-                    <label class="text-xl">Hello World</label>
+                <div class="h-full p-6 flex flex-col justify-center items-center space-y-1">
+                    <label class="text-2xl">Hello World</label>
                     <button onclick={ this.increment } class="bg-zinc-300 px-4 p-1 rounded-md text-sm hover:bg-zinc-200 active:bg-zinc-100">Increment: {count}</button>
+                    <svg width="100" height="100">
+                        <circle cx="50" cy="50" r={count} stroke="black" stroke-width="2" fill="red" />
+                    </svg>
                 </div>
             </div>
         </>;
