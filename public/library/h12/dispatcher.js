@@ -1,45 +1,38 @@
-const targets = new EventTarget();
-const handlers = new Map();
+class Dispatcher  {
+    
+    #listeners = new Map();
 
-const dispatcher = {
-    /**
-        * Binds an event listener to a specified event name.
-        * @param {string} name - The name of the event to listen for.
-        * @param {Function} callback - The callback function to execute when the event is triggered.
-    */
-    bind(name = "", callback) {
-        if(name && callback) {
-            const wrappedCallback = (event) => {
-                callback(event, event.detail);
-            };
-            handlers.set(callback, wrappedCallback);
-            targets.addEventListener(name, wrappedCallback);
+    on(event, listener) {
+        if (!this.#listeners.has(event)) {
+            this.#listeners.set(event, []);
         }
-    },
-    /**
-        * Unbinds an event listener from a specified event name.
-        * @param {string} name - The name of the event to remove.
-        * @param {Function} callback - The original callback function to remove.
-    */
-    unbind(name = "", callback) {
-        if(name && callback) {
-            const wrappedCallback = handlers.get(callback);
-            if (wrappedCallback) {
-                targets.removeEventListener(name, wrappedCallback);
-                handlers.delete(callback);
-            }
+        this.#listeners.get(event).push(listener);
+    }
+    off(event, listener) {
+        if (this.#listeners.has(event)) {
+            this.#listeners.set(event, this.#listeners.get(event).filter((l) => l !== listener));
         }
-    },
-    /**
-        * Dispatches an event of specified name with optional arguments.
-        * @param {string} name - The name of the event to dispatch.
-        * @param {any} argument - The data to pass as `detail` in the event.
-    */
-    call(name = "", argument) {
-        if(name) {
-            targets.dispatchEvent(new CustomEvent(name, { detail: argument }));
+    }
+    emit(event, ... args) {
+        if (this.#listeners.has(event)) {
+            this.#listeners.get(event).forEach((listener) => listener(... args));
         }
+    }
+    once(event, listener) {
+        const wrapper = (... args) => {
+            this.off(event, wrapper);
+            listener(... args);
+        };
+        this.on(event, wrapper);
+    }
+    clear(event) {
+        if (this.#listeners.has(event)) {
+            this.#listeners.delete(event);
+        }
+    }
+    clearAll() {
+        this.#listeners.clear();
     }
 }
 
-export default dispatcher;
+export { Dispatcher }

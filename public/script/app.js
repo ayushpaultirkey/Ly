@@ -30,4 +30,6 @@ class App extends H12 {
 };
 
 // Render app
-new App().init(".app");
+document.querySelector(".app").appendChild(
+    new App().init()
+);
