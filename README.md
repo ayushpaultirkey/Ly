@@ -333,6 +333,31 @@ document.body.appendChild(new App().init());
     }
     ```
 
+- **`relay: any`**
+    A data that passes from parent component to its child component. If a child component have its own relay then it will merge with parent's relay.
+
+    *example:*
+    ```js
+    class App extends H12 {
+        constructor() {
+            super();
+            this.relay = { name: "Some Name" };
+        }
+        render() {
+            return <>
+                <Button args></Button>
+            </>;
+        }
+    }
+    class Button extends H12 {
+        constructor() {
+            super();
+        }
+        main() {
+            console.log(this.relay.name); // Output: "Some Name"
+        }
+    }
+    ```
 
 ## Methods
 - **`render()`**

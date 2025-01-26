@@ -1,6 +1,5 @@
 import XRegExp from "xregexp";
 import { JSDOM } from "jsdom";
-import fs from "fs";
 
 const PLACEHOLDER_CODE = "__CODE__";
 const PLACEHOLDER_KEY = "__KEY__";
@@ -30,7 +29,6 @@ function main(code = "", ignoreCheck = false) {
 
         for(const bracket in brackets) {
             pharsed = pharsed.replace(bracket.replace(/\{|\}/g, ""), brackets[bracket]);
-            console.log(brackets[bracket], bracket);
         }
 
         const haveSubTemplate = pharsed.includes("<>") && pharsed.includes("</>");
@@ -68,7 +66,7 @@ function preFormatBrackets(text = "") {
 
 }
 
-function pharseText(element = document.body) {
+function pharseText(element) {
 
     if(!element || element.nodeType != 3) {
         return;
@@ -140,7 +138,7 @@ function pharseText(element = document.body) {
 
 }
 
-function pharseAttribute(element = document.body) {
+function pharseAttribute(element) {
     
     if(!element || element.nodeType != 1) {
         return;
@@ -183,7 +181,7 @@ function pharseAttribute(element = document.body) {
     
 }
 
-function pharseNode(element = document.body) {
+function pharseNode(element) {
     
     if(!element) {
         return;
@@ -215,7 +213,7 @@ function pharseNode(element = document.body) {
     
 }
 
-function phraseDOM(element = document.body) {
+function phraseDOM(element) {
 
     if(!element) {
         return "";
@@ -234,7 +232,7 @@ function phraseDOM(element = document.body) {
     const hasAlias = element.hasAttribute("alias");
     const isComponent = element.hasAttribute("args");
 
-    const scope = (isComponent && hasScope) ? element.getAttribute("scope") + "_@SCOPE" :  "this";
+    const scope = (isComponent && hasScope) ? element.getAttribute("scope").replace(/\{|\}|\s+/g, "") :  "this";
     const method = isComponent ? "component" : "node";
 
     let name;

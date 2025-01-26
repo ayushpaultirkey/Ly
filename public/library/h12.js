@@ -72,6 +72,13 @@ export default class H12 {
         */
         this.key = {};
 
+        /**
+            * A data that is passed from the parent component to its child components.
+            * If the child component doesnt have its own relay declared then it will
+            * be appended along with the parent relay.
+        */
+        this.relay = null;
+
     }
 
     /**
@@ -273,8 +280,9 @@ export default class H12 {
             const component = new node();
 
             component.id = args.id || component.id;
-            component.args = { ... args, child: children[0] };
             component.parent = this;
+            component.args = { ... args, child: children[0] };
+            component.relay = component.relay ? { ... this.relay, ... component.relay } : this.relay;
 
             this.child[component.id] = component;
             return component.init();
@@ -328,27 +336,26 @@ export default class H12 {
         const mapping = this.#binding[key];
         if (!mapping) return;
 
-        const fValue = typeof(value) === "function" ? value() : value;
-
         const elements = mapping.element;
         elements.forEach(element => {
 
             const node = element.node;
             const parent = element.parent || node.parentNode;
+            const fValue = typeof(value) === "function" ? value() : value;
 
             if(element.type == 0) {
-                if (value instanceof Element) {
+                if(fValue instanceof Element) {
                     parent.replaceChild(fValue, node);
                     element.type = 1;
                     element.node = fValue;
                 }
-                else if (this.#isValidType(value)) {
+                else if(this.#isValidType(fValue)) {
                     node.nodeValue = index < 0 ? fValue : (index === 0 ? fValue + node.nodeValue : node.nodeValue + fValue);
                 }
             }
             else if(element.type == 1) {
-                if (value instanceof Element) {
-                    if (index !== -1) {
+                if(fValue instanceof Element) {
+                    if(index !== -1) {
                         parent.insertAdjacentElement((index == 0) ? "afterbegin" : "beforeend", fValue);
                         element.clone.push(fValue);
                         return;
@@ -358,7 +365,7 @@ export default class H12 {
                         element.node = fValue;
                     }
                 }
-                else if (this.#isValidType(value)) {
+                else if(this.#isValidType(fValue)) {
                     const textNode = document.createTextNode(fValue);
                     parent.replaceChild(textNode, node);
                     element.type = 0;
@@ -371,12 +378,12 @@ export default class H12 {
                 node.remove();
                 this.#gc();
             }
-            else if(element.type == 2 && this.#isValidType(value)) {
+            else if(element.type == 2 && this.#isValidType(fValue)) {
                 let elementMapping = element.map;
                 let keyMatch = elementMapping.match(/\{[^{}\s]*\}/gm);
-                if (keyMatch) {
+                if(keyMatch) {
                     keyMatch.forEach(keyFound => {
-                        if (keyFound === key) {
+                        if(keyFound === key) {
                             elementMapping = elementMapping.replace(keyFound, fValue);
                         }
                         else {
